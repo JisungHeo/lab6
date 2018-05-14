@@ -152,7 +152,18 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 				FIFO [selection][addr_idx] = 1'b1; // if fresh, 1
 				FIFO [~selection][addr_idx] = 1'b0;
 				tag [selection][addr_idx] = addr_tag;
-				data [selection][addr_idx] = inputData;
+				if (addr_bo == 2'b00) begin
+					data [selection][addr_idx][15:0] = inputData;
+				end
+				else if(addr_bo == 2'b01) begin
+					data [selection][addr_idx][31:16] = inputData;
+				end
+				else if(addr_bo == 2'b10) begin
+					data [selection][addr_idx][47:32] = inputData;
+				end
+				else begin
+					data [selection][addr_idx][63:48] = inputData;
+				end
 			end
 		end
 		
