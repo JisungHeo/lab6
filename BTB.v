@@ -1,6 +1,7 @@
-module BTB (clk, reset_n, PCindex, bneControl, EX_PC, branch_addr, valid, tag, nextPC);
+module BTB (clk, reset_n, WriteEn, PCindex, bneControl, EX_PC, branch_addr, valid, tag, nextPC);
 	input clk;
 	input reset_n;
+	input WriteEn;
 	input [5:0] PCindex;
 	input bneControl;
 	input [15:0] EX_PC;
@@ -22,10 +23,12 @@ module BTB (clk, reset_n, PCindex, bneControl, EX_PC, branch_addr, valid, tag, n
 	end
 	
 	always @(negedge clk) begin
-		if (bneControl) begin
-			ValidCache[EX_PC[5:0]] = 1'b1;
-			TagCache[EX_PC[5:0]] = EX_PC[15:6];
-			NextPCCache[EX_PC[5:0]] = branch_addr;
+		if (WriteEn == 1'b1) begin
+			if (bneControl) begin
+				ValidCache[EX_PC[5:0]] = 1'b1;
+				TagCache[EX_PC[5:0]] = EX_PC[15:6];
+				NextPCCache[EX_PC[5:0]] = branch_addr;
+			end
 		end
 	end
 			

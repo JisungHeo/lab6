@@ -15,7 +15,7 @@ module Memory(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, 
 	input [`WORD_SIZE-1:0] address1;
 	wire [`WORD_SIZE-1:0] address1;
 	output data1;
-	reg [`WORD_SIZE-1:0] data1;
+	reg [63:0] data1;
 	
 	input readM2;
 	wire readM2;
@@ -24,13 +24,30 @@ module Memory(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, 
 	input [`WORD_SIZE-1:0] address2;
 	wire [`WORD_SIZE-1:0] address2;
 	inout data2;
-	wire [`WORD_SIZE-1:0] data2;
+	wire [63:0] data2;
 	
 	reg [`WORD_SIZE-1:0] memory [0:`MEMORY_SIZE-1];
-	reg [`WORD_SIZE-1:0] outputData2;
+	reg [63:0] outputData2;
 	
-	assign data2 = readM2?outputData2:`WORD_SIZE'bz;
+	assign data2 = readM2?outputData2:64'bz;
+
+	reg [15:0] count1;
+	reg [15:0] count2;
 	
+	wire access1 = (readM1);
+	wire access2 = (readM2 || writeM2);
+	
+	always @(posedge access1) begin
+		count1 = 5;
+	end
+
+	always @(posedge access2) begin
+		count2 = 5;
+	end
+
+	wire memory_block1 = {memory[{address1[15:2],2'b11}], memory[{address1[15:2],2'b10}], memory[{address1[15:2],2'b01}], memory[{address1[15:2],2'b00}]};
+	wire memory_block2 = {memory[{address2[15:2],2'b11}], memory[{address2[15:2],2'b10}], memory[{address2[15:2],2'b01}], memory[{address2[15:2],2'b00}]};
+
 	always@(posedge clk)
 		if(!reset_n)
 			begin
@@ -233,11 +250,23 @@ module Memory(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, 
 				memory[16'hc4] <= 16'h4ffe;
 				memory[16'hc5] <= 16'hf819;
 				memory[16'hc6] <= 16'hf01d;
+				count1 <= 0;
+				count2 <= 0;
 			end
 		else
 			begin
-				if(readM1)data1 <= (writeM2 & address1==address2)?data2:memory[address1];
-				if(readM2)outputData2 <= memory[address2];
-				if(writeM2)memory[address2] <= data2;															  
+				if(count1 == 0) begin				
+					if(readM1)data1 <= (writeM2 & address1==address2)?data2:memory_block1;
+				end
+				if(count2 == 0) begin
+					if(readM2)outputData2 <= memory_block2;
+					if(writeM2)memory[address2] <= data2[15:0];															  
+				end
+				if (count1 > 0) begin
+					count1 <= (count1 - 1);
+				end
+				if (count2 > 0) begin
+					count2 <= (count2 - 1);
+				end
 			end
 endmodule

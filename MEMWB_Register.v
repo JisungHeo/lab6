@@ -1,8 +1,9 @@
-module MEMWB_Register(clk, reset_n, WB_forwarded, MEM_PC4, MEM_ReadDataOfMem, MEM_ALUResult, MEM_WriteRegister, MEM_JLControl,// input
+module MEMWB_Register(clk, reset_n, WriteEn, WB_forwarded, MEM_PC4, MEM_ReadDataOfMem, MEM_ALUResult, MEM_WriteRegister, MEM_JLControl,// input
 		      WB_RegWrite, WB_MemtoReg, // control output
 		      WB_PC4, WB_ReadDataOfMem, WB_ALUResult, WB_WriteRegister, WB_JLControl); // data output
 	input clk;
 	input reset_n;
+	input WriteEn;
 	input [1:0] WB_forwarded;
 	input [15:0] MEM_PC4, MEM_ReadDataOfMem, MEM_ALUResult;
 	input [1:0] MEM_WriteRegister;
@@ -24,13 +25,15 @@ module MEMWB_Register(clk, reset_n, WB_forwarded, MEM_PC4, MEM_ReadDataOfMem, ME
 	end
 
 	always @(posedge clk) begin
-		WB_RegWrite = WB_forwarded[1];
-		WB_MemtoReg = WB_forwarded[0];
-		WB_PC4 = MEM_PC4;
-		WB_ReadDataOfMem = MEM_ReadDataOfMem;
-		WB_ALUResult = MEM_ALUResult;
-		WB_WriteRegister = MEM_WriteRegister;
-		WB_JLControl = MEM_JLControl;
+		if (WriteEn == 1'b1) begin
+			WB_RegWrite = WB_forwarded[1];
+			WB_MemtoReg = WB_forwarded[0];
+			WB_PC4 = MEM_PC4;
+			WB_ReadDataOfMem = MEM_ReadDataOfMem;
+			WB_ALUResult = MEM_ALUResult;
+			WB_WriteRegister = MEM_WriteRegister;
+			WB_JLControl = MEM_JLControl;
+		end
 	end
 endmodule
 		

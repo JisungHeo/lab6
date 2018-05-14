@@ -1,87 +1,157 @@
-module Cache (clk, reset_n, address, data);
+module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, write, readData, WriteEn);
 	input clk;
 	input reset_n;
-
 	input [15:0] address;
-	output [15:0] data;
+	input [15:0] inputData;
+	output readM;
+	output writeM;
+	inout [63:0] dataM;
+	input read;
+	input write;
+	output [15:0] readData;
+	output WriteEn;
 
-	reg [76:0] cache [0:3][0:1];	
-	wire tag[9:0];
-	wire index[1:0];
-	wire block[1:0];
-	wire data[15:0];
+	reg readM;
+	reg writeM;
 
-	assign tag = address[15:6];
-	assign index = address[5:4];
-	assign block = address[3:2];
-
-	getDataFromCache(tag,index,block,cache,data);	
-endmodule
-
-module getDataFromCache(tag, index, block, cache, data);
-	input [76:0] cache [0:3][0:1];	//valid(1),LRU(1), dirty(1),tag(10),data(64)
-	input tag[9:0];
-	input index[1:0];
-	input block[1:0];
-	output data[15:0]; 
+	reg valid [0:1][0:3];
+	reg FIFO [0:1][0:3];
+	reg [11:0] tag [0:1][0:3];
+	reg [63:0] data [0:1][0:3];
 	
-	wire valid;
-	wire line[76:0];
-	wire valid;
-	wire tmp_data[15:0];
+	reg i;
+	reg [1:0] j;
 
-	findLineFromCache(tag,index,cache,line,valid);
-	getDataFromLine(line, block,tmp_data);
-
-	if(valid) begin
-		assign data = tmp_data;	
-	end
-	else begin
-		assign data = 16'h
-zzzz;
-	end
-endmodule
-
-//find line from cache
-module findLineFromCache(tag,index,cache,line,valid);
-	input [76:0] cache [0:3][0:1];	//valid(1),LRU(1), dirty(1),tag(10),data(64)
-	input tag[9:0];
-	input index[1:0];
-
-	output line[76:0];
-	output reg valid; //*****
-
-	wire [76:0]line1;
-	wire [76:0]line2;
-
-	assign line1 = cache[index][0];
-	assign line2 = cache[index][1];
-	
-	//line1 test
-	if (line1[76])begin // if line1 valid
-		if (line1[73:64] == tag) begin //tag match
-			assign line = line1;
-			assign valid = line1[76];
+	always @(reset_n) begin
+		for (i=0; i<=1; i=i+1) begin
+			for (j=0; j<=3; j=j+1) begin
+				valid[i][j] = 0;
+			 	FIFO[i][j] = 0;
+				tag[i][j] = 0;
+				data[i][j] = 0;
+			end
 		end
 	end
 
-	//line2 test
-	if (line2[76])begin // if line2 valid
-		if (line2[73:64] == tag) begin //tag match
-			assign line = line2;
-			assign valid = line2[76];
+	assign dataM = (writeM ? {{48{1'bz}}, inputData} : {64{1'bz}});
+
+	wire [11:0] addr_tag;
+	wire [1:0] addr_idx;
+	wire [1:0] addr_bo;
+
+	assign addr_tag = address[11:0];
+	assign addr_idx = address[1:0];
+	assign addr_bo = address[1:0];
+
+	wire valid1, valid2;
+	wire FIFO1, FIFO2;	
+	wire [11:0] tag1;
+	wire [11:0] tag2;
+	wire hit1, hit2;
+	wire [63:0] data1;
+	wire [63:0] data2;
+
+	assign valid1 = valid[0][addr_idx];
+	assign valid2 = valid[1][addr_idx];
+	assign FIFO1 = FIFO[0][addr_idx];
+	assign FIFO2 = FIFO[1][addr_idx];
+	assign tag1 = tag[0][addr_idx];
+	assign tag2 = tag[1][addr_idx];
+
+	assign hit1 = ((tag1 == addr_tag) && (valid1 == 1'b1));
+	assign hit2 = ((tag2 == addr_tag) && (valid2 == 1'b1));
+
+	assign data1 = hit1 ? {64{1'bz}} : data[0][addr_idx];
+	assign data2 = hit2 ? {64{1'bz}} : data[1][addr_idx];
+
+	wire hit;
+	assign hit = (hit1 || hit2);
+
+	wire [64:0] readBlock;
+	assign readBlock = hit1 ? data1 : data2;
+	sixteenBitMultiplexer4to1 mul4to1(readBlock[15:0], readBlock[31:16], readBlock[47:32], readBlock[63:48], addr_bo, readData);
+
+//------------------------------------------eviction, stalling, memory read/write--------
+
+	// write hit 
+	// write miss
+	// read miss
+	wire memory_access;
+	assign memory_access = ((write == 1'b1) || (read == 1'b1 && hit == 1'b0));
+
+	reg [15:0] count;
+	always @(reset_n) begin
+		count = 0;
+		readM = 0;
+		writeM = 0;
+	end
+
+	wire write_hit, write_miss, read_hit, read_miss;
+	assign write_hit = ((write == 1'b1) && (hit == 1'b1));
+	assign write_miss = ((write == 1'b1) && (hit == 1'b0));
+	assign read_hit = ((read == 1'b1) && (hit == 1'b1));
+	assign read_miss = ((read == 1'b1) && (hit == 1'b0));
+
+	always @(posedge memory_access) begin
+		if (write_hit || write_miss) begin // write hit, write miss
+			writeM = 1'b1;
+		end
+		else if (read_miss) begin // read miss
+			readM = 1'b1;
+		end
+		count = 6;
+	end
+
+	assign WriteEn = (count == 0);
+
+	reg selection;
+	always @(*) begin
+		if (hit1 == 1'b1) begin
+			selection = 0;
+		end	
+		else if (hit2 == 1'b1) begin
+			selection = 1;
+		end
+		else if (valid1 == 1'b1) begin
+			selection = 0;
+		end
+		else if (valid2 == 1'b1) begin
+			selection = 1;
+		end
+		else if (FIFO1 == 1'b1) begin
+			selection = 0;
+		end
+		else begin
+			selection = 1;
 		end
 	end
-	
+
+	always @(posedge clk) begin
+		if (count == 6) begin
+			if (write_hit) begin
+				valid [selection][addr_idx] = 1'b1;
+				FIFO [selection][addr_idx] = 1'b1; // if fresh, 1
+				FIFO [~selection][addr_idx] = 1'b0;
+				tag [selection][addr_idx] = addr_tag;
+				data [selection][addr_idx] = inputData;
+			end
+		end
+		
+		else if (count == 0) begin
+			if (read_miss) begin
+				valid [selection][addr_idx] = 1'b1;
+				FIFO [selection][addr_idx] = 1'b1; // if fresh, 1
+				FIFO [~selection][addr_idx] = 1'b0;
+				tag [selection][addr_idx] = addr_tag;
+				data [selection][addr_idx] = dataM;
+			end
+			readM = 0;
+			writeM = 0;
+		end	
+
+		if (count > 0) begin
+			count = (count - 1);
+		end
+	end
 endmodule
 
-//Get Data from Line
-module getDataFromLine(line, block, data);
-	input line[76:0];
-	input block[1:0];
-	output data[15:0];
-
-	wire index;
-	assign index = 63 - (4'h0010*block_index); //find bit in line 
-	assign data = line[index:index-4'b1111]; 
-endmodule

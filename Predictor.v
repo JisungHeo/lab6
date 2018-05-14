@@ -1,7 +1,8 @@
 //2 bit global predictor
-module Predictor (clk, reset_n, EX_Branch, EX_Taken, prediction);
+module Predictor (clk, reset_n, WriteEn, EX_Branch, EX_Taken, prediction);
 	input clk;
 	input reset_n;
+	input WriteEn;
 	input EX_Branch;
 	input EX_Taken;
 	output prediction;
@@ -13,15 +14,17 @@ module Predictor (clk, reset_n, EX_Branch, EX_Taken, prediction);
 	end
 
 	always @(negedge clk) begin
-		if (EX_Branch == 1'b1) begin
-			if (EX_Taken == 1'b1) begin
-				if (predictor != 2'b11) begin
-					predictor = predictor + 1;
+		if (WriteEn == 1'b1) begin
+			if (EX_Branch == 1'b1) begin
+				if (EX_Taken == 1'b1) begin
+					if (predictor != 2'b11) begin
+						predictor = predictor + 1;
+					end
 				end
-			end
-			else if (EX_Taken == 1'b0) begin
-				if (predictor != 2'b00) begin
-					predictor = predictor - 1;
+				else if (EX_Taken == 1'b0) begin
+					if (predictor != 2'b00) begin
+						predictor = predictor - 1;
+					end
 				end
 			end
 		end

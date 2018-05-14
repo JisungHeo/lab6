@@ -18,10 +18,10 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 	output [`WORD_SIZE-1:0] address2;
 	wire [`WORD_SIZE-1:0] address2;
 
-	input [`WORD_SIZE-1:0] data1;
-	wire [`WORD_SIZE-1:0] data1;
-	inout [`WORD_SIZE-1:0] data2;
-	wire [`WORD_SIZE-1:0] data2;
+	input [63:0] data1;
+	wire [63:0] data1;
+	inout [63:0] data2;
+	wire [63:0] data2;
 
 	output [`WORD_SIZE-1:0] num_inst;
 	reg [`WORD_SIZE-1:0] num_inst;
@@ -105,7 +105,11 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 	wire Stall_flush;
 	wire flush;
 
-
+	wire [15:0] readWord1;
+	wire WriteEn1;
+	wire [15:0] readWord2;
+	wire WriteEn2;
+	wire WriteEn = WriteEn1 || WriteEn2;
 //---------------------------------------------Output code
 	always @(reset_n) begin
 		num_inst = 0;
@@ -130,17 +134,21 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 	assign ID_valid = ~flush;
 
 	always @(posedge clk) begin
-		EX_valid <= ID_valid;
-		MEM_valid <= EX_valid;
-		WB_valid <= MEM_valid;
+		if (WriteEn == 1'b1) begin
+			EX_valid <= ID_valid;
+			MEM_valid <= EX_valid;
+			WB_valid <= MEM_valid;
 
-		MEM_rs <= EX_rs;
-		WB_rs <= MEM_rs;
+			MEM_rs <= EX_rs;
+			WB_rs <= MEM_rs;
+		end
 	end
 
 	always @(posedge clk) begin
-		if (MEM_valid==1'b1) begin
-			num_inst = num_inst + 1;
+		if (WriteEn == 1'b1) begin
+			if (MEM_valid==1'b1) begin
+				num_inst = num_inst + 1;
+			end
 		end
 	end
 
@@ -149,9 +157,11 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 	reg EX_halt, MEM_halt, WB_halt;
 	assign halt = (opcode == 4'b1111) && (funct == 6'b011101);
 	always @(posedge clk) begin
-		EX_halt <= halt;
-		MEM_halt <= EX_halt;
-		WB_halt <= MEM_halt;
+		if (WriteEn == 1'b1) begin
+			EX_halt <= halt;
+			MEM_halt <= EX_halt;
+			WB_halt <= MEM_halt;
+		end
 	end
 	assign is_halted = ((WB_halt == 1'b1) && (WB_valid == 1'b1));
 
@@ -160,10 +170,10 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 	wire valid;
 	wire [9:0] tag;
 	wire [15:0] nextPC;
-	BTB btb(clk, reset_n, PC[5:0], mispredict, EX_PC, branch_addr, valid, tag, nextPC);
+	BTB btb(clk, reset_n, WriteEn, PC[5:0], mispredict, EX_PC, branch_addr, valid, tag, nextPC);
 	
 	wire prediction;
-	Predictor pred(clk, reset_n, EX_Branch, bcond, prediction);
+	Predictor pred(clk, reset_n, WriteEn, EX_Branch, bcond, prediction);
 
 	
 	wire [15:0] newPC;
@@ -181,27 +191,34 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 	end
 
 	always @(posedge clk) begin
-		ID_newPCControl <= newPCControl;
-		EX_newPCControl <= ID_newPCControl;
+		if (WriteEn == 1'b1) begin
+			ID_newPCControl <= newPCControl;
+			EX_newPCControl <= ID_newPCControl;
+		end
 	end
 
 
 //----------------------------------------------
+
+	
+
 	//PC update
-	PC_Register PC_update(clk, reset_n, newPC, PC_WriteEn, PC);
+	PC_Register PC_update(clk, reset_n, newPC, PC_WriteEn || WriteEn, PC);
 
 	//add 4 to PC
 	ADD ADD_PC_4(PC,16'h0001,IF_PC4);
-
-	assign readM1 = 1'b1;
+	
+	wire WriteM1;
+	Cache cache1(clk, reset_n, PC, {16{1'bz}}, readM1, WriteM1, data1, 1'b1, 1'b0, readWord1, WriteEn1);
+	//assign readM1 = 1'b1;
 	assign address1 = PC;
 
 	//Instruction Memory - Instruction in data1
 	//Memory IF(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, data2);
 //-------------------------------------------------------------------
 	//IF_ID Register
-	assign IF_instruction = data1;
-	IFID_Register IFID_register_update(clk, reset_n, IF_PC4, IF_instruction , IF_flush, IFID_WriteEn, ID_PC4, ID_instruction, IFID_flush);
+	assign IF_instruction = readWord1;
+	IFID_Register IFID_register_update(clk, reset_n, IF_PC4, IF_instruction , IF_flush, IFID_WriteEn || WriteEn, ID_PC4, ID_instruction, IFID_flush);
 	
 	//ControlUnit
 	assign opcode = ID_instruction[15:12];
@@ -228,7 +245,7 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 	
 //-----------------------------------------------
 	//ID_EX Register
-	IDEX_Register IDEX_Register_update(clk, reset_n, ID_PC4, ID_ControlInput, readData1, readData2, im16_ext, ID_rs, ID_rt, ID_rd, JRControl, JLControl, //control and data input
+	IDEX_Register IDEX_Register_update(clk, reset_n, WriteEn, ID_PC4, ID_ControlInput, readData1, readData2, im16_ext, ID_rs, ID_rt, ID_rd, JRControl, JLControl, //control and data input
 		     WB, MEM, //bunch output
 		     EX_Branch, EX_ALUSrc, EX_RegDst, EX_opcode, EX_funct, EX_JRControl, EX_JLControl, //control output
 		     EX_PC4, EX_im16_ext, EX_ReadData1, EX_ReadData2, EX_rs, EX_rt, EX_rd);
@@ -266,22 +283,24 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 	sixteenBitMultiplexer2to1 MUX_EX_JRControl(PC2,BusA_ALU,EX_JRControl,PCin);
 
 //----------------------------------------------------------------
-	EXMEM_Register EXMEM_Register_update(clk, reset_n, WB, MEM, EX_PC4, EX_ALUResult, BusB_forwarded, EX_WriteRegister, EX_JLControl, // input
+	EXMEM_Register EXMEM_Register_update(clk, reset_n, WriteEn, WB, MEM, EX_PC4, EX_ALUResult, BusB_forwarded, EX_WriteRegister, EX_JLControl, // input
 		      WB_forwarded, MEM_MemWrite, MEM_MemRead, MEM_RegWrite,// control output
 		      MEM_PC4, MEM_ALUResult, MEM_BusB_forwarded, MEM_WriteRegister, MEM_JLControl); // data output
 	
 	//Data memory
 	assign address2 = MEM_ALUResult;
-	assign data2 = writeM2 ? MEM_BusB_forwarded: `WORD_SIZE'hzzzz;
-	assign readM2 = MEM_MemRead; //iorD deleted ?????
-	assign writeM2 = MEM_MemWrite;
-	assign MEM_ReadDataOfMem = data2;
+	
+	Cache cache2(clk, reset_n, MEM_ALUResult, MEM_BusB_forwarded, readM2, writeM2, data2, MEM_MemRead, MEM_MemWrite, readWord2, WriteEn2);
+	//assign data2 = writeM2 ? MEM_BusB_forwarded: `WORD_SIZE'hzzzz;
+	//assign readM2 = MEM_MemRead; //iorD deleted ?????
+	//assign writeM2 = MEM_MemWrite;
+	assign MEM_ReadDataOfMem = readWord2;
 
 	//forward unit
 	ForwardingUnit ForwardingUnit_call(MEM_WriteRegister, MEM_RegWrite, WB_WriteRegister, WB_RegWrite, EX_rs, EX_rt, ForwardA, ForwardB);
 
 //------------------------------------------------------------------------
-	MEMWB_Register MEMWB_Register_update(clk, reset_n, WB_forwarded, MEM_PC4, MEM_ReadDataOfMem, MEM_ALUResult, MEM_WriteRegister, MEM_JLControl,// input
+	MEMWB_Register MEMWB_Register_update(clk, reset_n, WriteEn, WB_forwarded, MEM_PC4, MEM_ReadDataOfMem, MEM_ALUResult, MEM_WriteRegister, MEM_JLControl,// input
 		      WB_RegWrite, WB_MemtoReg, // control output
 		      WB_PC4, WB_ReadDataOfMem, WB_ALUResult, WB_WriteRegister, WB_JLControl); // data output
 	
