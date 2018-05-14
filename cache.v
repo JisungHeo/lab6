@@ -67,7 +67,7 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	wire hit;
 	assign hit = (hit1 || hit2);
 
-	wire [64:0] readBlock;
+	wire [63:0] readBlock;
 	assign readBlock = hit1 ? data1 : data2;
 	sixteenBitMultiplexer4to1 mul4to1(readBlock[15:0], readBlock[31:16], readBlock[47:32], readBlock[63:48], addr_bo, readData);
 
@@ -94,7 +94,24 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	wire memory_access;
 	assign memory_access = ((write == 1'b1) || (read == 1'b1 && hit == 1'b0));
 
-	assign WriteEn = (count == 0);
+	reg WriteEn;
+
+	always @(*) begin
+		if (memory_access == 1'b1) begin
+			WriteEn = 1'b0;
+			if (write_hit || write_miss) begin // write hit, write miss
+				writeM = 1'b1;
+			end
+			else if (read_miss) begin // read miss
+				readM = 1'b1;
+			end
+			count = 7;
+		end
+	end
+	
+	always @(posedge (count == 1)) begin
+		WriteEn = 1'b1;
+	end
 
 	reg selection;
 	always @(*) begin
@@ -104,10 +121,10 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 		else if (hit2 == 1'b1) begin
 			selection = 1;
 		end
-		else if (valid1 == 1'b1) begin
+		else if (valid1 == 1'b0) begin
 			selection = 0;
 		end
-		else if (valid2 == 1'b1) begin
+		else if (valid2 == 1'b0) begin
 			selection = 1;
 		end
 		else if (FIFO1 == 1'b0) begin
@@ -119,13 +136,10 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	end
 
 	always @(posedge clk) begin
-		if (write_hit || write_miss) begin // write hit, write miss
-			writeM = 1'b1;
+		
+		if (count > 0) begin
+			count = (count - 1);
 		end
-		else if (read_miss) begin // read miss
-			readM = 1'b1;
-		end
-		count = 6;
 		
 		if (count == 6) begin
 			if (write_hit) begin
@@ -149,9 +163,7 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 			writeM = 0;
 		end	
 
-		if (count > 0) begin
-			count = (count - 1);
-		end
+		
 	end
 endmodule
 
