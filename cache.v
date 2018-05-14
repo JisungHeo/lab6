@@ -39,8 +39,8 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	wire [1:0] addr_idx;
 	wire [1:0] addr_bo;
 
-	assign addr_tag = address[11:0];
-	assign addr_idx = address[1:0];
+	assign addr_tag = address[15:4];
+	assign addr_idx = address[3:2];
 	assign addr_bo = address[1:0];
 
 	wire valid1, valid2;
@@ -61,8 +61,8 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	assign hit1 = ((tag1 == addr_tag) && (valid1 == 1'b1));
 	assign hit2 = ((tag2 == addr_tag) && (valid2 == 1'b1));
 
-	assign data1 = hit1 ? {64{1'bz}} : data[0][addr_idx];
-	assign data2 = hit2 ? {64{1'bz}} : data[1][addr_idx];
+	assign data1 = hit1 ? data[0][addr_idx] : {64{1'bz}};
+	assign data2 = hit2 ? data[1][addr_idx] : {64{1'bz}};
 
 	wire hit;
 	assign hit = (hit1 || hit2);
@@ -79,8 +79,10 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	
 
 	reg [15:0] count;
+	reg WriteEn;
 	always @(reset_n) begin
 		count = 0;
+		WriteEn = 1'b1;
 		readM = 0;
 		writeM = 0;
 	end
@@ -94,7 +96,7 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	wire memory_access;
 	assign memory_access = ((write == 1'b1) || (read == 1'b1 && hit == 1'b0));
 
-	reg WriteEn;
+	
 
 	always @(*) begin
 		if (memory_access == 1'b1) begin
@@ -109,7 +111,7 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 		end
 	end
 	
-	always @(posedge (count == 1)) begin
+	always @(posedge (count == 0)) begin
 		WriteEn = 1'b1;
 	end
 
@@ -139,6 +141,9 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 		
 		if (count > 0) begin
 			count = (count - 1);
+		end else begin
+			readM = 0;
+			writeM = 0;
 		end
 		
 		if (count == 6) begin
@@ -159,8 +164,6 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 				tag [selection][addr_idx] = addr_tag;
 				data [selection][addr_idx] = dataM;
 			end
-			readM = 0;
-			writeM = 0;
 		end	
 
 		
