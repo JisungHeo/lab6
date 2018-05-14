@@ -76,7 +76,7 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	// write hit 
 	// write miss
 	// read miss
-	reg memory_access;
+	
 
 	reg [15:0] count;
 	always @(reset_n) begin
@@ -91,15 +91,8 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	assign read_hit = ((read == 1'b1) && (hit == 1'b1));
 	assign read_miss = ((read == 1'b1) && (hit == 1'b0));
 
-	always @(posedge memory_access) begin
-		if (write_hit || write_miss) begin // write hit, write miss
-			writeM = 1'b1;
-		end
-		else if (read_miss) begin // read miss
-			readM = 1'b1;
-		end
-		count = 6;
-	end
+	wire memory_access;
+	assign memory_access = ((write == 1'b1) || (read == 1'b1 && hit == 1'b0));
 
 	assign WriteEn = (count == 0);
 
@@ -126,9 +119,13 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	end
 
 	always @(posedge clk) begin
-		if ((write == 1'b1) || (read == 1'b1 && hit == 1'b0)) begin
-			memory_access = 1'b1;
+		if (write_hit || write_miss) begin // write hit, write miss
+			writeM = 1'b1;
 		end
+		else if (read_miss) begin // read miss
+			readM = 1'b1;
+		end
+		count = 6;
 		
 		if (count == 6) begin
 			if (write_hit) begin

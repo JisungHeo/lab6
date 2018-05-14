@@ -109,7 +109,7 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 	wire WriteEn1;
 	wire [15:0] readWord2;
 	wire WriteEn2;
-	wire WriteEn = WriteEn1 || WriteEn2;
+	wire WriteEn = WriteEn1 && WriteEn2;
 //---------------------------------------------Output code
 	always @(reset_n) begin
 		num_inst = 0;
@@ -203,7 +203,7 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 	
 
 	//PC update
-	PC_Register PC_update(clk, reset_n, newPC, PC_WriteEn || WriteEn, PC);
+	PC_Register PC_update(clk, reset_n, newPC, PC_WriteEn && WriteEn, PC);
 
 	//add 4 to PC
 	ADD ADD_PC_4(PC,16'h0001,IF_PC4);
@@ -218,7 +218,7 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 //-------------------------------------------------------------------
 	//IF_ID Register
 	assign IF_instruction = readWord1;
-	IFID_Register IFID_register_update(clk, reset_n, IF_PC4, IF_instruction , IF_flush, IFID_WriteEn || WriteEn, ID_PC4, ID_instruction, IFID_flush);
+	IFID_Register IFID_register_update(clk, reset_n, IF_PC4, IF_instruction , IF_flush, IFID_WriteEn && WriteEn, ID_PC4, ID_instruction, IFID_flush);
 	
 	//ControlUnit
 	assign opcode = ID_instruction[15:12];
