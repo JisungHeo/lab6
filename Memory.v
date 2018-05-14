@@ -10,12 +10,15 @@ module Memory(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, 
 	input reset_n;
 	wire reset_n;
 	
-	input readM1;
+	inout readM1;
 	wire readM1;
 	input [`WORD_SIZE-1:0] address1;
 	wire [`WORD_SIZE-1:0] address1;
-	output data1;
-	reg [63:0] data1;
+	inout data1;
+	wire [63:0] data1;
+	reg [63:0] outputData1;
+	
+	assign data1 = readM1?outputData1:64'bz;
 	
 	input readM2;
 	wire readM2;
@@ -256,7 +259,7 @@ module Memory(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, 
 		else
 			begin
 				if(count1 == 0) begin				
-					if(readM1)data1 <= (writeM2 & address1==address2)?data2:memory_block1;
+					if(readM1)outputData1 <= (writeM2 & address1==address2)?data2:memory_block1;
 				end
 				if(count2 == 0) begin
 					if(readM2)outputData2 <= memory_block2;

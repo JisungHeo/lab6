@@ -18,7 +18,7 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 	output [`WORD_SIZE-1:0] address2;
 	wire [`WORD_SIZE-1:0] address2;
 
-	input [63:0] data1;
+	inout [63:0] data1;
 	wire [63:0] data1;
 	inout [63:0] data2;
 	wire [63:0] data2;

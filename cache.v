@@ -19,8 +19,8 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	reg [11:0] tag [0:1][0:3];
 	reg [63:0] data [0:1][0:3];
 	
-	reg i;
-	reg [1:0] j;
+	reg [15:0] i;
+	reg [15:0] j;
 
 	always @(reset_n) begin
 		for (i=0; i<=1; i=i+1) begin
@@ -76,8 +76,7 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	// write hit 
 	// write miss
 	// read miss
-	wire memory_access;
-	assign memory_access = ((write == 1'b1) || (read == 1'b1 && hit == 1'b0));
+	reg memory_access;
 
 	reg [15:0] count;
 	always @(reset_n) begin
@@ -118,7 +117,7 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 		else if (valid2 == 1'b1) begin
 			selection = 1;
 		end
-		else if (FIFO1 == 1'b1) begin
+		else if (FIFO1 == 1'b0) begin
 			selection = 0;
 		end
 		else begin
@@ -127,6 +126,10 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	end
 
 	always @(posedge clk) begin
+		if ((write == 1'b1) || (read == 1'b1 && hit == 1'b0)) begin
+			memory_access = 1'b1;
+		end
+		
 		if (count == 6) begin
 			if (write_hit) begin
 				valid [selection][addr_idx] = 1'b1;
