@@ -41,11 +41,11 @@ module Memory(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, 
 	wire access2 = (readM2 || writeM2);
 	
 	always @(posedge access1) begin
-		count1 = 7;
+		count1 = 6;
 	end
 
 	always @(posedge access2) begin
-		count2 = 7;
+		count2 = 6;
 	end
 
 	wire [63:0] memory_block1 = {memory[{address1[15:2],2'b11}], memory[{address1[15:2],2'b10}], memory[{address1[15:2],2'b01}], memory[{address1[15:2],2'b00}]};
@@ -258,10 +258,10 @@ module Memory(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, 
 			end
 		else
 			begin
-				if(count1 == 1) begin				
-					if(readM1)outputData1 <= (writeM2 & address1==address2)?data2:memory_block1;
+				if(count1 == 0) begin				
+					if(readM1)outputData1 <= memory_block1;//(writeM2 & address1==address2)?data2:memory_block1;
 				end
-				if(count2 == 1) begin
+				if(count2 == 0) begin
 					if(readM2)outputData2 <= memory_block2;
 					if(writeM2)memory[address2] <= data2[15:0];															  
 				end

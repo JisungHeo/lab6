@@ -107,21 +107,24 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 			else if (read_miss) begin // read miss
 				readM = 1'b1;
 			end
-			count = 7;
+			count = 8;
 		end
 	end
 
 	always @(posedge clk) begin
 		if ((write == 1'b1) && writeM == 1'b0) begin
 			writeM = 1'b1;
-			count = 7;
+			count = 8;
 			WriteEn = 1'b0;
+		end
+		if (count == 1) begin
+			WriteEn = 1'b1;
 		end
 	end
 	
-	always @(posedge (count == 0)) begin
-		WriteEn = 1'b1;
-	end
+	//always @(posedge (count == 0)) begin
+	//	WriteEn = 1'b1;
+	//end
 
 	reg selection;
 	always @(*) begin
@@ -149,11 +152,9 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 		
 		if (count > 0) begin
 			count = (count - 1);
-		end else begin
-			readM = 0;
 		end
 		
-		if (count == 6) begin
+		if (count == 7) begin
 			if (write_hit) begin
 				valid [selection][addr_idx] = 1'b1;
 				FIFO [selection][addr_idx] = 1'b1; // if fresh, 1
@@ -174,7 +175,7 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 			end
 		end
 		
-		else if (count == 0) begin
+		else if (count == 1) begin
 			if (read_miss) begin
 				valid [selection][addr_idx] = 1'b1;
 				FIFO [selection][addr_idx] = 1'b1; // if fresh, 1
@@ -182,9 +183,13 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 				tag [selection][addr_idx] = addr_tag;
 				data [selection][addr_idx] = dataM;
 			end
-			writeM = 0;
+			
 		end	
+		else if (count == 0) begin
+			writeM = 0;
+			readM = 0;
 
+		end
 		
 	end
 endmodule
