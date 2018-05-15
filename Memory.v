@@ -48,8 +48,8 @@ module Memory(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, 
 		count2 = 7;
 	end
 
-	wire [64:0] memory_block1 = {memory[{address1[15:2],2'b11}], memory[{address1[15:2],2'b10}], memory[{address1[15:2],2'b01}], memory[{address1[15:2],2'b00}]};
-	wire [64:0] memory_block2 = {memory[{address2[15:2],2'b11}], memory[{address2[15:2],2'b10}], memory[{address2[15:2],2'b01}], memory[{address2[15:2],2'b00}]};
+	wire [63:0] memory_block1 = {memory[{address1[15:2],2'b11}], memory[{address1[15:2],2'b10}], memory[{address1[15:2],2'b01}], memory[{address1[15:2],2'b00}]};
+	wire [63:0] memory_block2 = {memory[{address2[15:2],2'b11}], memory[{address2[15:2],2'b10}], memory[{address2[15:2],2'b01}], memory[{address2[15:2],2'b00}]};
 
 	always@(posedge clk)
 		if(!reset_n)

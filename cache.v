@@ -101,13 +101,21 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	always @(*) begin
 		if (memory_access == 1'b1) begin
 			WriteEn = 1'b0;
-			if (write_hit || write_miss) begin // write hit, write miss
+			if ((write_hit || write_miss)) begin // write hit, write miss
 				writeM = 1'b1;
 			end
 			else if (read_miss) begin // read miss
 				readM = 1'b1;
 			end
 			count = 7;
+		end
+	end
+
+	always @(posedge clk) begin
+		if ((write == 1'b1) && writeM == 1'b0) begin
+			writeM = 1'b1;
+			count = 7;
+			WriteEn = 1'b0;
 		end
 	end
 	
@@ -143,7 +151,6 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 			count = (count - 1);
 		end else begin
 			readM = 0;
-			writeM = 0;
 		end
 		
 		if (count == 6) begin
@@ -175,6 +182,7 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 				tag [selection][addr_idx] = addr_tag;
 				data [selection][addr_idx] = dataM;
 			end
+			writeM = 0;
 		end	
 
 		
