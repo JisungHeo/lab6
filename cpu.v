@@ -1,7 +1,7 @@
 `timescale 1ns/1ns
 `define WORD_SIZE 16    // data and address word size
 //`include "Multiplexer16bit2to1.v"
-module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, data2, num_inst, output_port, is_halted);
+module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, data2, num_inst, output_port, is_halted, memory_ack1, memory_ack2);
 	input clk;
 	wire clk;
 	input reset_n;
@@ -29,6 +29,9 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 	wire [`WORD_SIZE-1:0] output_port;
 	output is_halted;
 	wire is_halted;
+
+	input memory_ack1;
+	input memory_ack2;
 	
 	//wire declaration
 	//IF
@@ -209,9 +212,9 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 	ADD ADD_PC_4(PC,16'h0001,IF_PC4);
 	
 	wire WriteM1;
-	Cache cache1(clk, reset_n, PC, {16{1'bz}}, readM1, WriteM1, data1, 1'b1, 1'b0, readWord1, WriteEn1);
+	Cache cache1(clk, reset_n, PC, {16{1'bz}}, address1, readM1, WriteM1, data1, 1'b1, 1'b0, readWord1, WriteEn1, memory_ack1);
 	//assign readM1 = 1'b1;
-	assign address1 = PC;
+	//assign address1 = PC;
 
 	//Instruction Memory - Instruction in data1
 	//Memory IF(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, data2);
@@ -288,9 +291,9 @@ module cpu(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, dat
 		      MEM_PC4, MEM_ALUResult, MEM_BusB_forwarded, MEM_WriteRegister, MEM_JLControl); // data output
 	
 	//Data memory
-	assign address2 = MEM_ALUResult;
+	//assign address2 = MEM_ALUResult;
 	
-	Cache cache2(clk, reset_n, MEM_ALUResult, MEM_BusB_forwarded, readM2, writeM2, data2, MEM_MemRead, MEM_MemWrite, readWord2, WriteEn2);
+	Cache cache2(clk, reset_n, MEM_ALUResult, MEM_BusB_forwarded, address2, readM2, writeM2, data2, MEM_MemRead, MEM_MemWrite, readWord2, WriteEn2, memory_ack2);
 	//assign data2 = writeM2 ? MEM_BusB_forwarded: `WORD_SIZE'hzzzz;
 	//assign readM2 = MEM_MemRead; //iorD deleted ?????
 	//assign writeM2 = MEM_MemWrite;

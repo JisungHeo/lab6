@@ -1,8 +1,9 @@
-module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, write, readData, WriteEn);
+module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, read, write, readData, WriteEn, memory_ack);
 	input clk;
 	input reset_n;
 	input [15:0] address;
 	input [15:0] inputData;
+	output reg [15:0] addressM;
 	output readM;
 	output writeM;
 	inout [63:0] dataM;
@@ -10,74 +11,106 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	input write;
 	output [15:0] readData;
 	output WriteEn;
+	input memory_ack; // 1: memory access has been completed
 
+	reg [15:0] outputData;
 	reg readM;
 	reg writeM;
 
-	reg valid [0:1][0:3];
-	reg FIFO [0:1][0:3];
-	reg [11:0] tag [0:1][0:3];
-	reg [63:0] data [0:1][0:3];
-	
+	reg valid [0:7];
+	reg [13:0] tag [0:7];
+	reg [63:0] block [0:7];
+	reg [15:0] LRU [0:7];
+	reg dirty [0:7];
+
 	reg [15:0] i;
 	reg [15:0] j;
 
 	always @(reset_n) begin
-		for (i=0; i<=1; i=i+1) begin
-			for (j=0; j<=3; j=j+1) begin
-				valid[i][j] = 0;
-			 	FIFO[i][j] = 0;
-				tag[i][j] = 0;
-				data[i][j] = 0;
-			end
-		end
+		{valid[0], valid[1], valid[2], valid[3], valid[4], valid[5], valid[6], valid[7]} = {{8{1'b0}}};
+		{tag[0], tag[1], tag[2], tag[3], tag[4], tag[5], tag[6], tag[7]} = {{8{14'b0}}};
+		{block[0], block[1], block[2], block[3], block[4], block[5], block[6], block[7]} = {{8{64'b0}}};
+		{dirty[0], dirty[1], dirty[2], dirty[3], dirty[4], dirty[5], dirty[6], dirty[7]} = {{8{1'b0}}};
+		outputData = 64'bz;
 	end
 
-	assign dataM = (writeM ? {{48{1'bz}}, inputData} : {64{1'bz}});
+	assign dataM = writeM ? outputData : {64{1'bz}}; // dataM
 
-	wire [11:0] addr_tag;
-	wire [1:0] addr_idx;
+	wire [13:0] addr_tag;
 	wire [1:0] addr_bo;
 
-	assign addr_tag = address[15:4];
-	assign addr_idx = address[3:2];
+	assign addr_tag = address[15:2];
 	assign addr_bo = address[1:0];
 
-	wire valid1, valid2;
-	wire FIFO1, FIFO2;	
-	wire [11:0] tag1;
-	wire [11:0] tag2;
-	wire hit1, hit2;
-	wire [63:0] data1;
-	wire [63:0] data2;
-
-	assign valid1 = valid[0][addr_idx];
-	assign valid2 = valid[1][addr_idx];
-	assign FIFO1 = FIFO[0][addr_idx];
-	assign FIFO2 = FIFO[1][addr_idx];
-	assign tag1 = tag[0][addr_idx];
-	assign tag2 = tag[1][addr_idx];
-
-	assign hit1 = ((tag1 == addr_tag) && (valid1 == 1'b1));
-	assign hit2 = ((tag2 == addr_tag) && (valid2 == 1'b1));
-
-	assign data1 = hit1 ? data[0][addr_idx] : {64{1'bz}};
-	assign data2 = hit2 ? data[1][addr_idx] : {64{1'bz}};
-
+	wire valid_wire [0:7];
+	wire [13:0] tag_wire [0:7];
+	wire [63:0] block_wire [0:7];
+	wire hit_wire [0:7];
+	wire [15:0] LRU_wire [0:7];
+	wire [63:0] block_bus;
 	wire hit;
-	assign hit = (hit1 || hit2);
 
-	wire [63:0] readBlock;
-	assign readBlock = hit1 ? data1 : data2;
-	sixteenBitMultiplexer4to1 mul4to1(readBlock[15:0], readBlock[31:16], readBlock[47:32], readBlock[63:48], addr_bo, readData);
+	assign valid_wire[0] = valid[0];
+	assign valid_wire[1] = valid[1];
+	assign valid_wire[2] = valid[2];
+	assign valid_wire[3] = valid[3];
+	assign valid_wire[4] = valid[4];
+	assign valid_wire[5] = valid[5];
+	assign valid_wire[6] = valid[6];
+	assign valid_wire[7] = valid[7];
+
+	assign block_wire[0] = block[0];
+	assign block_wire[1] = block[1];
+	assign block_wire[2] = block[2];
+	assign block_wire[3] = block[3];
+	assign block_wire[4] = block[4];
+	assign block_wire[5] = block[5];
+	assign block_wire[6] = block[6];
+	assign block_wire[7] = block[7];
+
+	assign tag_wire[0] = tag[0];
+	assign tag_wire[1] = tag[1];
+	assign tag_wire[2] = tag[2];
+	assign tag_wire[3] = tag[3];
+	assign tag_wire[4] = tag[4];
+	assign tag_wire[5] = tag[5];
+	assign tag_wire[6] = tag[6];
+	assign tag_wire[7] = tag[7];
+
+	assign hit_wire[0] = ((tag_wire[0] == addr_tag) && (valid_wire[0] == 1'b1));
+	assign hit_wire[1] = ((tag_wire[1] == addr_tag) && (valid_wire[1] == 1'b1));
+	assign hit_wire[2] = ((tag_wire[2] == addr_tag) && (valid_wire[2] == 1'b1));
+	assign hit_wire[3] = ((tag_wire[3] == addr_tag) && (valid_wire[3] == 1'b1));
+	assign hit_wire[4] = ((tag_wire[4] == addr_tag) && (valid_wire[4] == 1'b1));
+	assign hit_wire[5] = ((tag_wire[5] == addr_tag) && (valid_wire[5] == 1'b1));
+	assign hit_wire[6] = ((tag_wire[6] == addr_tag) && (valid_wire[6] == 1'b1));
+	assign hit_wire[7] = ((tag_wire[7] == addr_tag) && (valid_wire[7] == 1'b1));
+
+	assign block_bus = hit_wire[0] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
+	assign block_bus = hit_wire[1] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
+	assign block_bus = hit_wire[2] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
+	assign block_bus = hit_wire[3] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
+	assign block_bus = hit_wire[4] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
+	assign block_bus = hit_wire[5] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
+	assign block_bus = hit_wire[6] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
+	assign block_bus = hit_wire[7] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
+
+
+	wire [7:0] valid_vector = {valid_wire[7], valid_wire[6], valid_wire[5],valid_wire[4], 
+				   valid_wire[3], valid_wire[2], valid_wire[1], valid_wire[0]};
+
+	assign hit = (hit_wire[0] || hit_wire[1] || hit_wire[2] || hit_wire[3] ||
+	 	      hit_wire[4] || hit_wire[5] || hit_wire[6] || hit_wire[7]);
+
+	sixteenBitMultiplexer4to1 mul4to1(block_bus[15:0], block_bus[31:16], block_bus[47:32], block_bus[63:48], addr_bo, readData);
 
 //------------------------------------------eviction, stalling, memory read/write--------
 
-	// write hit 
-	// write miss
-	// read miss
-	
+	// write hit: no memory access
+	// write miss with dirty eviction: 2 memory access
 
+	// read hit: no memory access
+	// read miss with dirty eviction: 2 memory access
 	reg [15:0] count;
 	reg WriteEn;
 	always @(reset_n) begin
@@ -93,104 +126,192 @@ module Cache (clk, reset_n, address, inputData, readM, writeM, dataM, read, writ
 	assign read_hit = ((read == 1'b1) && (hit == 1'b1));
 	assign read_miss = ((read == 1'b1) && (hit == 1'b0));
 
+	//if miss, always access memory
 	wire memory_access;
-	assign memory_access = ((write == 1'b1) || (read == 1'b1 && hit == 1'b0));
+	assign memory_access = ~hit;
 
+	//What line to evict
+	wire [2:0] eviction_set; //index of evicted line
+	//eviction_selector Eviction(clk, reset_n, eviction_set, LRU_wire, valid_wire);
+	wire dirty_eviction = ~hit && dirty[eviction_set];  //Whether evicted line should be wirte back?
+
+	reg [3:0] condition; // 0: no cache access
+			     // 1: read hit
+			     // 2: read miss without dirty eviction
+			     // 3: read miss with dirty eviction
+			     // 4: write hit
+			     // 5: write miss without dirty eviction
+			     // 6: write miss with dirty eviction
 	
-
-	always @(*) begin
-		if (memory_access == 1'b1) begin
-			WriteEn = 1'b0;
-			if ((write_hit || write_miss)) begin // write hit, write miss
-				writeM = 1'b1;
-			end
-			else if (read_miss) begin // read miss
-				readM = 1'b1;
-			end
-			count = 8;
-		end
-	end
-
-	always @(posedge clk) begin
-		if ((write == 1'b1) && writeM == 1'b0) begin
-			writeM = 1'b1;
-			count = 8;
-			WriteEn = 1'b0;
-		end
-		if (count == 1) begin
-			WriteEn = 1'b1;
-		end
-	end
+	//Write back to Memory(drity) or Data read from Memory
 	
-	//always @(posedge (count == 0)) begin
-	//	WriteEn = 1'b1;
-	//end
-
-	reg selection;
+	//LRU_Register LRU_update(address,read,write,reset_n, valid_vector, selection,LRU_vector);
 	always @(*) begin
-		if (hit1 == 1'b1) begin
-			selection = 0;
-		end	
-		else if (hit2 == 1'b1) begin
-			selection = 1;
+		WriteEn = 0;
+		if(read_miss == 1'b1)begin
+			//Read miss without dirty eviction
+			if (~dirty_eviction) begin
+				condition = 2;
+				addressM = address;
+				readM = 1;
+			end
+			//Read miss with dirty
+			else begin
+				condition = 3;
+				//write_back
+				addressM = {tag[eviction_set], 2'b00};
+				outputData = block[eviction_set];
+				writeM = 1;
+			end
 		end
-		else if (valid1 == 1'b0) begin
-			selection = 0;
-		end
-		else if (valid2 == 1'b0) begin
-			selection = 1;
-		end
-		else if (FIFO1 == 1'b0) begin
-			selection = 0;
-		end
-		else begin
-			selection = 1;
+		else if(write_miss == 1'b1) begin
+			//Write miss withoug dirty eviction
+			if (~dirty_eviction) begin
+				condition = 5;
+				addressM = address;
+				readM = 1;
+			end
+			//Write miss with dirty
+			else begin
+				condition = 6;
+				addressM = {tag[eviction_set], 2'b00};
+				outputData = block[eviction_set];
+				writeM = 1;
+			end
 		end
 	end
 
-	always @(posedge clk) begin
-		
-		if (count > 0) begin
-			count = (count - 1);
-		end
-		
-		if (count == 7) begin
-			if (write_hit) begin
-				valid [selection][addr_idx] = 1'b1;
-				FIFO [selection][addr_idx] = 1'b1; // if fresh, 1
-				FIFO [~selection][addr_idx] = 1'b0;
-				tag [selection][addr_idx] = addr_tag;
-				if (addr_bo == 2'b00) begin
-					data [selection][addr_idx][15:0] = inputData;
-				end
-				else if(addr_bo == 2'b01) begin
-					data [selection][addr_idx][31:16] = inputData;
-				end
-				else if(addr_bo == 2'b10) begin
-					data [selection][addr_idx][47:32] = inputData;
-				end
-				else begin
-					data [selection][addr_idx][63:48] = inputData;
-				end
-			end
-		end
-		
-		else if (count == 1) begin
-			if (read_miss) begin
-				valid [selection][addr_idx] = 1'b1;
-				FIFO [selection][addr_idx] = 1'b1; // if fresh, 1
-				FIFO [~selection][addr_idx] = 1'b0;
-				tag [selection][addr_idx] = addr_tag;
-				data [selection][addr_idx] = dataM;
-			end
-			
-		end	
-		else if (count == 0) begin
-			writeM = 0;
+	// 2: read miss without dirty eviction
+	// 3: read miss with dirty eviction
+	// 5: write miss without dirty eviction
+	// 6: write miss with dirty eviction
+
+	always @(posedge memory_ack) begin
+		//read without eviction
+		if (condition == 2) begin 
+			valid[eviction_set] = 1;
+			tag[eviction_set] = addr_tag;
+			block[eviction_set] = dataM;
 			readM = 0;
-
+			condition = 0;
 		end
-		
+		//eviciton read
+		else if (condition == 3) begin 
+			condition = 2;
+			addressM = address;
+			writeM = 0;
+			readM = 1;
+		end
+		//write without eviction
+		else if (condition == 5) begin 
+			valid[eviction_set] = 1;
+			tag[eviction_set] = addr_tag;
+			block[eviction_set] = dataM;
+			readM = 0;
+			if(addr_bo == 2'b00)begin
+				block[eviction_set][15:0] = inputData;
+			end
+			else if(addr_bo == 2'b01) begin
+				block[eviction_set][31:16] = inputData;
+			end
+			else if(addr_bo == 2'b10) begin
+				block[eviction_set][47:32] = inputData;
+			end
+			else if(addr_bo == 2'b11) begin
+				block[eviction_set][63:48] = inputData;
+			end
+			condition = 0;
+		end
+		//write with eviction
+		else if (condition == 6)begin //write
+			condition = 5;
+			addressM = address;
+			writeM = 0;
+			readM = 1;
+		end
 	end
-endmodule
 
+
+	//LRU update
+	always @(address) begin
+	  if(read || write)begin
+ 	  	if(valid_wire[0] == 1)begin
+      			LRU[0] = LRU[0] + 1;
+    		end
+    		if(valid_wire[1] == 1)begin
+    		 	LRU[1] = LRU[1] + 1;
+   		end
+    		if(valid_wire[2] == 1)begin
+    		 	LRU[2] = LRU[2] + 1;
+   		end
+    		if(valid_wire[3] == 1)begin
+    		 	LRU[3] = LRU[3] + 1;
+   		end
+    		if(valid_wire[4] == 1)begin
+    		 	LRU[4] = LRU[4] + 1;
+   		end
+    		if(valid_wire[5] == 1)begin
+    		 	LRU[5] = LRU[5] + 1;
+   		end
+    		if(valid_wire[6] == 1)begin
+    		 	LRU[6] = LRU[6] + 1;
+   		end
+    		if(valid_wire[7] == 1)begin
+    		 	LRU[7] = LRU[7] + 1;
+   		end
+    		LRU[eviction_set] = 0;
+	  end
+	end
+
+	//Select Eviciton set
+	wire [7:0] valid_vector_tmp;
+ 	assign valid_vector_tmp = valid_vector + 1;
+ 	wire [7:0] vector_xor;
+ 	assign vector_xor =  valid_vector ^ valid_vector_tmp;
+  	wire [2:0] idx;
+  	assign idx = vector_xor[0]+vector_xor[1]+vector_xor[2] + vector_xor[3]+
+                    vector_xor[4] + vector_xor[5] + vector_xor[6] + vector_xor[7] -1;
+
+  	reg [2:0] selection;
+ 	reg [15:0] max;
+  	assign eviction_set = selection;
+ 	always @(*)begin
+  		  //eviction start
+    		max = LRU_wire[0];
+  	  	selection = 0;
+    		if(valid_vector == 8'b11111111)begin
+      			if(LRU_wire[1] > max )begin
+      				max = LRU_wire[1];
+				selection = 3'b1;
+      			end
+      			if(LRU_wire[2] > max)begin
+      				max = LRU_wire[2];
+				selection = 3'b10;
+      			end
+      			if(LRU_wire[3] > max)begin
+        			max = LRU_wire[3];
+				selection = 3'b11;
+      			end
+      			if(LRU_wire[4] > max)begin
+        			max = LRU_wire[4];
+				selection = 3'b100;
+      			end
+      			if(LRU_wire[5] > max)begin
+				max = LRU_wire[5];
+      				selection = 3'b101;
+      			end
+      			if(LRU_wire[6] > max)begin
+				max = LRU_wire[6];
+        			selection = 3'b110;
+      			end
+      			if(LRU_wire[7] > max)begin
+				max = LRU_wire[7];
+        			selection = 3'b111;
+      			end
+    		end
+    		else begin
+    			selection = idx;
+    		end
+  	end
+
+endmodule

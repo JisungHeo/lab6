@@ -4,7 +4,7 @@
 `define WORD_SIZE 16	//	instead of 2^16 words to reduce memory
 			//	requirements in the Active-HDL simulator 
 
-module Memory(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, data2);
+module Memory(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, data2, memory_ack1, memory_ack2);
 	input clk;
 	wire clk;
 	input reset_n;
@@ -28,6 +28,10 @@ module Memory(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, 
 	wire [`WORD_SIZE-1:0] address2;
 	inout data2;
 	wire [63:0] data2;
+	output memory_ack1;
+	reg memory_ack1;
+	output memory_ack2;
+	reg memory_ack2;
 	
 	reg [`WORD_SIZE-1:0] memory [0:`MEMORY_SIZE-1];
 	reg [63:0] outputData2;
@@ -255,15 +259,19 @@ module Memory(clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, 
 				memory[16'hc6] <= 16'hf01d;
 				count1 <= 0;
 				count2 <= 0;
+				memory_ack1 <= 0;
+				memory_ack2 <= 1;
 			end
 		else
 			begin
 				if(count1 == 0) begin				
 					if(readM1)outputData1 <= memory_block1;//(writeM2 & address1==address2)?data2:memory_block1;
+					memory_ack1 <= 1;
 				end
 				if(count2 == 0) begin
 					if(readM2)outputData2 <= memory_block2;
-					if(writeM2)memory[address2] <= data2[15:0];															  
+					if(writeM2)memory[address2] <= data2[15:0];							
+					memory_ack2 <= 1;								  
 				end
 				if (count1 > 0) begin
 					count1 <= (count1 - 1);
