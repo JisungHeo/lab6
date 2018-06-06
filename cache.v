@@ -147,9 +147,10 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
 	
 	//LRU_Register LRU_update(address,read,write,reset_n, valid_vector, selection,LRU_vector);
 	always @(*) begin
-		WriteEn = 0;
+
 		if(read_miss == 1'b1)begin
 			//Read miss without dirty eviction
+			WriteEn = 0;
 			if (~dirty_eviction) begin
 				condition = 2;
 				addressM = address;
@@ -166,6 +167,7 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
 		end
 		else if(write_miss == 1'b1) begin
 			//Write miss withoug dirty eviction
+			WriteEn = 0;
 			if (~dirty_eviction) begin
 				condition = 5;
 				addressM = address;
@@ -194,6 +196,7 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
 			block[eviction_set] = dataM;
 			readM = 0;
 			condition = 0;
+			WriteEn = 1;
 		end
 		//eviciton read
 		else if (condition == 3) begin 
@@ -221,6 +224,7 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
 				block[eviction_set][63:48] = inputData;
 			end
 			condition = 0;
+			WriteEn = 1;
 		end
 		//write with eviction
 		else if (condition == 6)begin //write
