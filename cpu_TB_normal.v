@@ -25,8 +25,20 @@ module cpu_TB();
 
 	wire memory_ack1;
 	wire memory_ack2;
+
+   // statistics
+   wire [15:0] num_read_hit1;
+   wire [15:0] num_read_miss1;
+   wire [15:0] num_write_hit1;
+   wire [15:0] num_write_miss1;
+
+   wire [15:0] num_read_hit2;
+   wire [15:0] num_read_miss2;
+   wire [15:0] num_write_hit2;
+   wire [15:0] num_write_miss2;
    // instantiate the unit under test
-   cpu UUT (clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, data2, num_inst, output_port, is_halted, memory_ack1, memory_ack2);
+   cpu UUT (clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, data2, num_inst, output_port, is_halted, memory_ack1, memory_ack2, 
+	    num_read_hit1, num_read_miss1, num_write_hit1, num_write_miss1, num_read_hit2, num_read_miss2, num_write_hit2, num_write_miss2);
    Memory NUUT(!clk, reset_n, readM1, address1, data1, readM2, writeM2, address2, data2, memory_ack1, memory_ack2);
 
    // initialize inputs
@@ -61,6 +73,16 @@ module cpu_TB();
       end
    end   
    always @(testbench_finish) begin
+      $display("num_read_hit1: %d", num_read_hit1);
+      $display("num_read_miss1: %d", num_read_miss1);
+      $display("num_write_hit1: %d", num_write_hit1);
+      $display("num_write_miss1: %d", num_write_miss1);
+
+      $display("num_read_hit2: %d", num_read_hit2);
+      $display("num_read_miss2: %d", num_read_miss2);
+      $display("num_write_hit2: %d", num_write_hit2);
+      $display("num_write_miss2: %d", num_write_miss2);
+
       $display("cache test finished. provide cache hit ratio on cache module.");
       $finish;
    end

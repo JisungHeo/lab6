@@ -1,4 +1,4 @@
-module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, read, write, readData, WriteEn, memory_ack);
+module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, read, write, readData, WriteEn, memory_ack, num_read_hit, num_read_miss, num_write_hit, num_write_miss);
 	input clk;
 	input reset_n;
 	input [15:0] address;
@@ -20,11 +20,17 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
 	reg valid [0:7];
 	reg [13:0] tag [0:7];
 	reg [63:0] block [0:7];
-	reg [15:0] LRU [0:7];
+	reg [3:0] LRU [0:7];
 	reg dirty [0:7];
 
 	reg [15:0] i;
 	reg [15:0] j;
+
+	//statistics
+	output reg [15:0] num_read_hit;
+	output reg [15:0] num_read_miss;
+	output reg [15:0] num_write_hit;
+	output reg [15:0] num_write_miss;
 
 	always @(reset_n) begin
 		{valid[0], valid[1], valid[2], valid[3], valid[4], valid[5], valid[6], valid[7]} = {{8{1'b0}}};
@@ -32,6 +38,10 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
 		{block[0], block[1], block[2], block[3], block[4], block[5], block[6], block[7]} = {{8{64'b0}}};
 		{dirty[0], dirty[1], dirty[2], dirty[3], dirty[4], dirty[5], dirty[6], dirty[7]} = {{8{1'b0}}};
 		outputData = 64'bz;
+		num_read_hit = 0;
+		num_read_miss = 0;
+		num_write_hit = 0;
+		num_write_miss = 0;
 	end
 
 	assign dataM = writeM ? outputData : {64{1'bz}}; // dataM
@@ -46,7 +56,6 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
 	wire [13:0] tag_wire [0:7];
 	wire [63:0] block_wire [0:7];
 	wire hit_wire [0:7];
-	wire [15:0] LRU_wire [0:7];
 	wire [63:0] block_bus;
 	wire hit;
 
@@ -153,6 +162,22 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
 	assign write_miss = ((write == 1'b1) && (hit == 1'b0));
 	assign read_hit = ((read == 1'b1) && (hit == 1'b1));
 	assign read_miss = ((read == 1'b1) && (hit == 1'b0));
+
+	//statistics
+	always @(address or read or write or inputData) begin
+		if (read_hit) begin
+			num_read_hit = num_read_hit + 1;
+		end
+		else if (read_miss) begin
+			num_read_miss = num_read_miss + 1;
+		end
+		else if (write_hit) begin
+			num_write_hit = num_write_hit + 1;
+		end
+		else if (read_miss) begin
+			num_write_miss = num_write_miss + 1;
+		end
+	end
 
 	//if miss, always access memory
 	wire memory_access;
@@ -314,7 +339,12 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
     		if(valid_wire[7] == 1)begin
     		 	LRU[7] = LRU[7] + 1;
    		end
-    		LRU[eviction_set] = 0;
+		if (hit == 1) begin
+	    		LRU[hit_set] = 0;
+		end
+		else begin
+	    		LRU[eviction_set] = 0;
+		end
 	  end
 	end
 
