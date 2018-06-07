@@ -87,13 +87,13 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
 	assign hit_wire[7] = ((tag_wire[7] == addr_tag) && (valid_wire[7] == 1'b1));
 
 	assign block_bus = hit_wire[0] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
-	assign block_bus = hit_wire[1] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
-	assign block_bus = hit_wire[2] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
-	assign block_bus = hit_wire[3] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
-	assign block_bus = hit_wire[4] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
-	assign block_bus = hit_wire[5] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
-	assign block_bus = hit_wire[6] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
-	assign block_bus = hit_wire[7] ? block_wire[0] : 64'hzzzzzzzzzzzzzzzz;
+	assign block_bus = hit_wire[1] ? block_wire[1] : 64'hzzzzzzzzzzzzzzzz;
+	assign block_bus = hit_wire[2] ? block_wire[2] : 64'hzzzzzzzzzzzzzzzz;
+	assign block_bus = hit_wire[3] ? block_wire[3] : 64'hzzzzzzzzzzzzzzzz;
+	assign block_bus = hit_wire[4] ? block_wire[4] : 64'hzzzzzzzzzzzzzzzz;
+	assign block_bus = hit_wire[5] ? block_wire[5] : 64'hzzzzzzzzzzzzzzzz;
+	assign block_bus = hit_wire[6] ? block_wire[6] : 64'hzzzzzzzzzzzzzzzz;
+	assign block_bus = hit_wire[7] ? block_wire[7] : 64'hzzzzzzzzzzzzzzzz;
 
 
 	wire [7:0] valid_vector = {valid_wire[7], valid_wire[6], valid_wire[5],valid_wire[4], 
@@ -101,6 +101,34 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
 
 	assign hit = (hit_wire[0] || hit_wire[1] || hit_wire[2] || hit_wire[3] ||
 	 	      hit_wire[4] || hit_wire[5] || hit_wire[6] || hit_wire[7]);
+
+	reg [2:0] hit_set;
+	always @(*) begin
+		if (hit_wire[0] == 1) begin
+			hit_set = 0;
+		end
+		else if (hit_wire[1] == 1) begin
+			hit_set = 1;
+		end
+		else if (hit_wire[2] == 1) begin
+			hit_set = 2;
+		end
+		else if (hit_wire[3] == 1) begin
+			hit_set = 3;
+		end
+		else if (hit_wire[4] == 1) begin
+			hit_set = 4;
+		end
+		else if (hit_wire[5] == 1) begin
+			hit_set = 5;
+		end
+		else if (hit_wire[6] == 1) begin
+			hit_set = 6;
+		end
+		else if (hit_wire[7] == 1) begin
+			hit_set = 7;
+		end
+	end
 
 	sixteenBitMultiplexer4to1 mul4to1(block_bus[15:0], block_bus[31:16], block_bus[47:32], block_bus[63:48], addr_bo, readData);
 
@@ -146,6 +174,28 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
 	//Write back to Memory(drity) or Data read from Memory
 	
 	//LRU_Register LRU_update(address,read,write,reset_n, valid_vector, selection,LRU_vector);
+	
+	always @(address or inputData or read or write) begin
+		if(write_hit == 1'b1) begin
+			valid[hit_set] = 1;
+			tag[hit_set] = addr_tag;
+			//readM = 0;
+			if(addr_bo == 2'b00)begin
+				block[hit_set][15:0] = inputData;
+			end
+			else if(addr_bo == 2'b01) begin
+				block[hit_set][31:16] = inputData;
+			end
+			else if(addr_bo == 2'b10) begin
+				block[hit_set][47:32] = inputData;
+			end
+			else if(addr_bo == 2'b11) begin
+				block[hit_set][63:48] = inputData;
+			end
+			condition = 0;
+		end
+	end
+	
 	always @(*) begin
 
 		if(read_miss == 1'b1)begin
@@ -181,6 +231,7 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
 				writeM = 1;
 			end
 		end
+		
 	end
 
 	// 2: read miss without dirty eviction
@@ -194,7 +245,7 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
 			valid[eviction_set] = 1;
 			tag[eviction_set] = addr_tag;
 			block[eviction_set] = dataM;
-			readM = 0;
+			//readM = 0;
 			condition = 0;
 			WriteEn = 1;
 		end
@@ -210,7 +261,7 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
 			valid[eviction_set] = 1;
 			tag[eviction_set] = addr_tag;
 			block[eviction_set] = dataM;
-			readM = 0;
+			//readM = 0;
 			if(addr_bo == 2'b00)begin
 				block[eviction_set][15:0] = inputData;
 			end
@@ -279,37 +330,38 @@ module Cache (clk, reset_n, address, inputData, addressM, readM, writeM, dataM, 
   	reg [2:0] selection;
  	reg [15:0] max;
   	assign eviction_set = selection;
+	
  	always @(*)begin
   		  //eviction start
-    		max = LRU_wire[0];
+    		max = LRU[0];
   	  	selection = 0;
     		if(valid_vector == 8'b11111111)begin
-      			if(LRU_wire[1] > max )begin
-      				max = LRU_wire[1];
+      			if(LRU[1] > max )begin
+      				max = LRU[1];
 				selection = 3'b1;
       			end
-      			if(LRU_wire[2] > max)begin
-      				max = LRU_wire[2];
+      			if(LRU[2] > max)begin
+      				max = LRU[2];
 				selection = 3'b10;
       			end
-      			if(LRU_wire[3] > max)begin
-        			max = LRU_wire[3];
+      			if(LRU[3] > max)begin
+        			max = LRU[3];
 				selection = 3'b11;
       			end
-      			if(LRU_wire[4] > max)begin
-        			max = LRU_wire[4];
+      			if(LRU[4] > max)begin
+        			max = LRU[4];
 				selection = 3'b100;
       			end
-      			if(LRU_wire[5] > max)begin
-				max = LRU_wire[5];
+      			if(LRU[5] > max)begin
+				max = LRU[5];
       				selection = 3'b101;
       			end
-      			if(LRU_wire[6] > max)begin
-				max = LRU_wire[6];
+      			if(LRU[6] > max)begin
+				max = LRU[6];
         			selection = 3'b110;
       			end
-      			if(LRU_wire[7] > max)begin
-				max = LRU_wire[7];
+      			if(LRU[7] > max)begin
+				max = LRU[7];
         			selection = 3'b111;
       			end
     		end
